@@ -49,7 +49,8 @@ script = ExtResource("1_byddt")
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 sprite_frames = SubResource("SpriteFrames_q4nce")
 animation = &"idle_side"
-frame_progress = 0.758638
+autoplay = "idle_side"
+frame_progress = 0.962067
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CapsuleShape2D_kw5um")
@@ -60,3 +61,6 @@ offset_left = -10.0
 offset_top = -10.0
 offset_right = 10.0
 offset_bottom = 10.0
+
+[connection signal="button_down" from="Button" to="." method="_on_button_button_down"]
+[connection signal="button_up" from="Button" to="." method="_on_button_button_up"]
