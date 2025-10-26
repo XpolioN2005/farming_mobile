@@ -15,6 +15,10 @@ metadata/_custom_type_script = "uid://chs35b5wyfqy3"
 
 [node name="base_worker" parent="." instance=ExtResource("2_pyidc")]
 
+[node name="base_worker2" parent="." instance=ExtResource("2_pyidc")]
+position = Vector2(304, -81)
+
 [node name="Icon" type="Sprite2D" parent="."]
+visible = false
 position = Vector2(90, 2)
 texture = ExtResource("1_pyidc")
