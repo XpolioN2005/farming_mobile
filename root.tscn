@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3 uid="uid://deooa77twdrf6"]
+
+[ext_resource type="PackedScene" uid="uid://cnm4yatmxkj5u" path="res://scenes/worker/base_worker.tscn" id="2_pyidc"]
+[ext_resource type="Script" uid="uid://chs35b5wyfqy3" path="res://scripts/cam/camara_controller.gd" id="2_vvh5c"]
+
+[node name="root" type="Node2D"]
+
+[node name="TouchCamera" type="Camera2D" parent="."]
+zoom = Vector2(2, 2)
+script = ExtResource("2_vvh5c")
+can_pan = true
+can_zoom = true
+metadata/_custom_type_script = "uid://chs35b5wyfqy3"
+
+[node name="base_worker" parent="." instance=ExtResource("2_pyidc")]
