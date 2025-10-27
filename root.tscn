@@ -1,10 +1,31 @@
-[gd_scene load_steps=4 format=3 uid="uid://deooa77twdrf6"]
+[gd_scene load_steps=7 format=3 uid="uid://deooa77twdrf6"]
 
-[ext_resource type="Texture2D" uid="uid://cpp4cbm5lxmnh" path="res://icon.svg" id="1_pyidc"]
 [ext_resource type="PackedScene" uid="uid://cnm4yatmxkj5u" path="res://scenes/worker/base_worker.tscn" id="2_pyidc"]
 [ext_resource type="Script" uid="uid://chs35b5wyfqy3" path="res://scripts/cam/camara_controller.gd" id="2_vvh5c"]
+[ext_resource type="Texture2D" uid="uid://j640m6xrfrsp" path="res://assests/sprites/fram/misc.png" id="4_jnlp7"]
+[ext_resource type="Script" uid="uid://daj7clik06qae" path="res://scripts/plot.gd" id="5_l8v81"]
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_vyht1"]
+texture = ExtResource("4_jnlp7")
+0:0/0 = 0
+1:0/0 = 0
+2:0/0 = 0
+0:1/0 = 0
+1:1/0 = 0
+2:1/0 = 0
+0:2/0 = 0
+1:2/0 = 0
+2:2/0 = 0
+
+[sub_resource type="TileSet" id="TileSet_bf3um"]
+sources/0 = SubResource("TileSetAtlasSource_vyht1")
 
 [node name="root" type="Node2D"]
+
+[node name="plot" type="TileMapLayer" parent="."]
+unique_name_in_owner = true
+tile_set = SubResource("TileSet_bf3um")
+script = ExtResource("5_l8v81")
 
 [node name="TouchCamera" type="Camera2D" parent="."]
 zoom = Vector2(2, 2)
@@ -12,11 +33,6 @@ script = ExtResource("2_vvh5c")
 can_pan = true
 can_zoom = true
 metadata/_custom_type_script = "uid://chs35b5wyfqy3"
-
-[node name="Icon" type="Sprite2D" parent="."]
-visible = false
-position = Vector2(90, 2)
-texture = ExtResource("1_pyidc")
 
 [node name="base_worker" parent="." instance=ExtResource("2_pyidc")]
 
