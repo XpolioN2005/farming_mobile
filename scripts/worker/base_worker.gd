@@ -236,6 +236,8 @@ func _update_facing() -> void:
 
 # Drag handlers
 func _on_button_button_down() -> void:
+	z_index = 1
+	scale *= 1.2
 	prev_state = state
 
 	# stop gossip on both sides if involved
@@ -257,6 +259,8 @@ func _on_button_button_down() -> void:
 	velocity = Vector2.ZERO
 
 func _on_button_button_up() -> void:
+	z_index = 0
+	scale = Vector2(1.0,1.0)
 	state = prev_state if prev_state != State.DRAGGING else State.IDLE
 	prev_state = state
 	SignalBus.emit_signal("worker_drag_stopped", self)

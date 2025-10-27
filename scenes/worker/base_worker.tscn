@@ -40,8 +40,8 @@ animations = [{
 }]
 
 [sub_resource type="CapsuleShape2D" id="CapsuleShape2D_kw5um"]
-radius = 6.0
-height = 14.0
+radius = 4.0
+height = 10.0
 
 [node name="base_worker" type="CharacterBody2D"]
 script = ExtResource("1_byddt")
@@ -53,6 +53,7 @@ autoplay = "idle_side"
 frame_progress = 0.962067
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, 2)
 shape = SubResource("CapsuleShape2D_kw5um")
 
 [node name="Button" type="Button" parent="."]
