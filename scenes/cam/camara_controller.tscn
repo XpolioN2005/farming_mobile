@@ -2,5 +2,11 @@
 
 [ext_resource type="Script" uid="uid://chs35b5wyfqy3" path="res://scripts/cam/camara_controller.gd" id="1_m6tgg"]
 
-[node name="Camera2D" type="Camera2D"]
+[node name="camara_controller" type="Camera2D"]
+zoom = Vector2(2, 2)
+limit_left = -735
+limit_top = -395
+limit_right = 635
+limit_bottom = 395
+limit_smoothed = true
 script = ExtResource("1_m6tgg")

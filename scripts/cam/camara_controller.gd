@@ -1,19 +1,41 @@
-
 extends Camera2D
-
 class_name TouchCamera
 
-@export var zoom_speed: float = 0.1
+# --- CONFIGURATION ---
+
+@export var can_pan: bool = true
+@export var can_zoom: bool = true
+
 @export var pan_speed: float = 1.0
-@export var rotation_speed: float = 1.0
+@export var zoom_speed: float = 0.1
 
-@export var can_pan: bool
-@export var can_zoom: bool
+@export var min_zoom: float = 1.0
+@export var max_zoom: float = 10.0
 
+@export var pan_smooth: float = 0.15
+@export var zoom_smooth: float = 0.1
+
+# Enable built-in camera limits
+@export var use_limits: bool = true
+
+# --- INTERNAL STATE ---
 var touch_points: Dictionary = {}
-var start_distance
-var start_zoom
+var start_distance: float
+var start_zoom: Vector2
+var target_zoom: Vector2
+var target_position: Vector2
 
+
+func _ready() -> void:
+	target_zoom = zoom
+	target_position = position
+
+
+func _process(_delta: float) -> void:
+	zoom = lerp(zoom, target_zoom, zoom_smooth)
+	position = lerp(position, target_position, pan_smooth)
+
+	
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		handle_touch(event)
@@ -22,41 +44,41 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventMouseButton:
 		handle_mouse_scroll(event)
 
-		
+
+# --- TOUCH HANDLING ---
+
 func handle_touch(event: InputEventScreenTouch) -> void:
 	if event.pressed:
 		touch_points[event.index] = event.position
 	else:
 		touch_points.erase(event.index)
-	
+
 	if touch_points.size() == 2:
-		var touch_point_positions = touch_points.values()
-		start_distance = touch_point_positions[0].distance_to(touch_point_positions[1])
+		var pts = touch_points.values()
+		start_distance = pts[0].distance_to(pts[1])
 		start_zoom = zoom
-	elif touch_points.size() < 2:
-		start_distance = 0
-		
+
+
 func handle_drag(event: InputEventScreenDrag) -> void:
 	touch_points[event.index] = event.position
-	
-	if touch_points.size() == 1:
-		if can_pan:
-			offset -= event.relative.rotated(rotation) * pan_speed /zoom.x
-			
-	elif touch_points.size() == 2:
-		var touch_point_positions = touch_points.values()
-		var current_dist = touch_point_positions[0].distance_to(touch_point_positions[1])
+
+	if touch_points.size() == 1 and can_pan:
+		target_position -= event.relative.rotated(rotation) * pan_speed / zoom.x
+	elif touch_points.size() == 2 and can_zoom:
+		var pts = touch_points.values()
+		var current_dist = pts[0].distance_to(pts[1])
 		var zoom_factor = start_distance / current_dist
-		
-		if can_zoom:
-			zoom = start_zoom / zoom_factor
-		limit_zoom(zoom)
-	
+		target_zoom = start_zoom / zoom_factor
+		limit_zoom()
+
+
+# --- MOUSE HANDLING ---
+
 func handle_mouse_scroll(event: InputEventMouseButton) -> void:
 	if not can_zoom:
 		return
 
-	var factor
+	var factor := 1.0
 	if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 		factor = 1.0 - zoom_speed
 	elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
@@ -64,17 +86,14 @@ func handle_mouse_scroll(event: InputEventMouseButton) -> void:
 	else:
 		return
 
-	zoom *= factor
-	limit_zoom(zoom)
+	target_zoom *= factor
+	limit_zoom()
 
 
-func limit_zoom(new_zoom) -> void:
-	if new_zoom.x < 1:
-		zoom.x = 1
-	if new_zoom.y < 1:
-		zoom.y = 1
-	if new_zoom.x > 10:
-		zoom.x = 10
-	if new_zoom.y > 10:
-		zoom.y = 10
-	
+# --- LIMITS ---
+
+func limit_zoom() -> void:
+	var avg_zoom = (target_zoom.x + target_zoom.y) * 0.5
+	avg_zoom = clamp(avg_zoom, min_zoom, max_zoom)
+	target_zoom = Vector2(avg_zoom, avg_zoom)
+
