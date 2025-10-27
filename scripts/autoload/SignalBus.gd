@@ -1,5 +1,6 @@
 extends Node
 
+@warning_ignore_start("unused_signal")
 signal worker_state_changed(worker, old_state, new_state)
 signal worker_arrived(worker, position)
 signal worker_work_started(worker, duration)

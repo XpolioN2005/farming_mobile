@@ -1,67 +1,79 @@
 extends CharacterBody2D
 class_name BaseWorker
 
+"""
+BaseWorker
+
+A simple autonomous worker NPC with states: IDLE, WANDER, GO_TO_WORK, WORKING, GOSSIP, DRAGGING.
+
+- Emits signals through a project-wide SignalBus:
+  "worker_state_changed", "worker_arrived", "worker_work_started",
+  "worker_work_finished", "worker_gossip_started", "worker_gossip_finished",
+  "worker_drag_started", "worker_drag_stopped"
+- Add this node to the "worker" group (done in _ready).
+"""
+
 enum State { IDLE, WANDER, GO_TO_WORK, WORKING, GOSSIP, DRAGGING }
 
-# --- CONFIG ---
-var speed: float = 120.0
-var wander_radius: float = 240.0
-var wander_retarget_time: float = 2.0
-var arrive_threshold: float = 16.0
-var idle_time_range: Vector2 = Vector2(1.0, 3.0)
+# Tunables (exported)
+@export_range(0.0, 2000.0, 1.0) var speed: float = 120.0
+@export_range(0.0, 2000.0, 1.0) var wander_radius: float = 240.0
+@export_range(0.0, 10.0, 0.1) var wander_retarget_time: float = 2.0
+@export_range(0.0, 64.0, 0.5) var arrive_threshold: float = 16.0
+@export var idle_time_range: Vector2 = Vector2(1.0, 3.0)
 
-# work / gossip
-var work_duration: float = 5.0
-var gossip_duration: float = 3.0
-var gossip_radius: float = 200.0
-var gossip_chance: float = 0.25
-var gossip_check_interval: float = 2.0
-var gossip_cooldown: float = 6.0
+@export_range(0.0, 120.0, 0.1) var work_duration: float = 5.0
+@export_range(0.0, 120.0, 0.1) var gossip_duration: float = 3.0
+@export_range(0.0, 2000.0, 1.0) var gossip_radius: float = 200.0
+@export_range(0.0, 1.0, 0.01) var gossip_chance: float = 0.25
+@export_range(0.1, 10.0, 0.1) var gossip_check_interval: float = 2.0
+@export_range(0.0, 60.0, 0.1) var gossip_cooldown: float = 6.0
 
-# --- STATE (safe setget backing) ---
+# Backing state + property (Godot 4 style)
 var _state_internal: State = State.IDLE
-var state: State setget _set_state, _get_state
-
-func _get_state() -> State:
-	return _state_internal
-
-func _set_state(new_state: State) -> void:
-	if new_state == _state_internal:
-		return
-	var old_state = _state_internal
-	_state_internal = new_state
-	# emit through SignalBus with self as reference
-	SignalBus.emit_signal("worker_state_changed", self, old_state, new_state)
+var state: State:
+	get:
+		return _state_internal
+	set(value):
+		if value == _state_internal:
+			return
+		var old_state = _state_internal
+		_state_internal = value
+		SignalBus.emit_signal("worker_state_changed", self, old_state, value)
 
 var prev_state: State = State.IDLE
 
-# --- TIMERS / TARGETS ---
+# Timers / targets
 var idle_timer: float = 0.0
 var wander_target: Vector2 = Vector2.ZERO
 var wander_timer: float = 0.0
 var origin: Vector2 = Vector2.ZERO
+
 var work_position: Vector2 = Vector2.ZERO
 var work_timer: float = 0.0
-var gossip_target: BaseWorker = null
-var drag_offset: Vector2 = Vector2.ZERO
 
-# gossip flags / timers
+# Gossip state
+var gossip_target: BaseWorker = null
+var gossip_timer: float = 0.0
 var is_gossiping: bool = false
 var can_gossip: bool = true
 var _gossip_check_timer: float = 0.0
 var _gossip_cooldown_timer: float = 0.0
 
-# --- NODES ---
+# Drag
+var drag_offset: Vector2 = Vector2.ZERO
+
+# Nodes
 @onready var _sprite_node: AnimatedSprite2D = $AnimatedSprite2D
 
-# --- READY ---
 func _ready() -> void:
 	add_to_group("worker")
 	velocity = Vector2.ZERO
 	origin = global_position
+	state = State.IDLE
 	_enter_idle()
+	_gossip_check_timer = gossip_check_interval
 
-# --- PHYSICS ---
 func _physics_process(delta: float) -> void:
 	_gossip_check_timer -= delta
 	if _gossip_check_timer <= 0.0:
@@ -75,20 +87,28 @@ func _physics_process(delta: float) -> void:
 			_gossip_cooldown_timer = 0.0
 
 	match state:
-		State.DRAGGING: _state_dragging()
-		State.IDLE: _state_idle(delta)
-		State.WANDER: _state_wander(delta)
-		State.GO_TO_WORK: _state_go_to_work(delta)
-		State.WORKING: _state_working(delta)
-		State.GOSSIP: _state_gossip(delta)
+		State.DRAGGING:
+			_state_dragging()
+		State.IDLE:
+			_state_idle(delta)
+		State.WANDER:
+			_state_wander(delta)
+		State.GO_TO_WORK:
+			_state_go_to_work(delta)
+		State.WORKING:
+			_state_working(delta)
+		State.GOSSIP:
+			_state_gossip(delta)
 
 	_update_facing()
 
-	if state not in [State.DRAGGING, State.IDLE, State.WORKING] and velocity != Vector2.ZERO:
-		velocity = velocity.limit_length(speed)
-		move_and_slide()
+	if state not in [State.DRAGGING, State.IDLE, State.WORKING]:
+		if velocity != Vector2.ZERO:
+			if velocity.length() > speed:
+				velocity = velocity.normalized() * speed
+			move_and_slide()
 
-# --- STATE LOGIC ---
+# State implementations
 func _state_dragging() -> void:
 	global_position = get_global_mouse_position() - drag_offset
 	velocity = Vector2.ZERO
@@ -130,24 +150,16 @@ func _state_gossip(delta: float) -> void:
 	if to.length() > arrive_threshold:
 		velocity = to.normalized() * speed
 	else:
-		work_timer -= delta
+		gossip_timer -= delta
 		velocity = Vector2.ZERO
-		if work_timer <= 0.0:
+		if gossip_timer <= 0.0:
 			_finish_gossip()
 
-# --- HELPERS ---
+# Transitions / helpers
 func _enter_idle() -> void:
-	_set_state_internal(State.IDLE)
+	state = State.IDLE
 	idle_timer = randf_range(idle_time_range.x, idle_time_range.y)
 	velocity = Vector2.ZERO
-
-# internal helper to avoid going through public setter (prevents double-emits)
-func _set_state_internal(new_state: State) -> void:
-	if new_state == _state_internal:
-		return
-	var old_state = _state_internal
-	_state_internal = new_state
-	SignalBus.emit_signal("worker_state_changed", self, old_state, new_state)
 
 func _pick_new_wander_target() -> void:
 	wander_timer = wander_retarget_time
@@ -161,11 +173,12 @@ func start_work_at(pos: Vector2, duration: float = -1.0) -> void:
 	work_timer = duration if duration > 0.0 else work_duration
 
 func _enter_working() -> void:
-	_set_state_internal(State.WORKING)
+	state = State.WORKING
 	if work_timer <= 0.0:
 		work_timer = work_duration
 	SignalBus.emit_signal("worker_work_started", self, work_timer)
 
+# Gossip
 func start_gossip_with(target: BaseWorker, duration: float = -1.0) -> bool:
 	if not _can_start_gossip(target):
 		return false
@@ -185,12 +198,11 @@ func _can_start_gossip(target: BaseWorker) -> bool:
 
 func _begin_gossip(target: BaseWorker, duration: float = -1.0) -> void:
 	gossip_target = target
-	_set_state_internal(State.GOSSIP)
+	state = State.GOSSIP
 	is_gossiping = true
-	work_timer = duration if duration > 0.0 else gossip_duration
+	gossip_timer = duration if duration > 0.0 else gossip_duration
 
 func _finish_gossip() -> void:
-	# keep local reference so we can emit who we were gossiping with
 	var prev_target = gossip_target
 	is_gossiping = false
 	SignalBus.emit_signal("worker_gossip_finished", self, prev_target)
@@ -207,7 +219,7 @@ func _try_autogossip() -> void:
 	if randf() >= gossip_chance:
 		return
 	var workers = get_tree().get_nodes_in_group("worker")
-	var candidates := []
+	var candidates: Array = []
 	for w in workers:
 		if w == self: continue
 		if not is_instance_valid(w): continue
@@ -222,20 +234,34 @@ func _update_facing() -> void:
 	if _sprite_node:
 		_sprite_node.flip_h = velocity.x < 0.0
 
-# --- DRAG ---
+# Drag handlers
 func _on_button_button_down() -> void:
 	prev_state = state
+
+	# stop gossip on both sides if involved
+	if is_gossiping and is_instance_valid(gossip_target):
+		gossip_target._finish_gossip()
+	# stop any other worker currently gossiping with us
+	var workers = get_tree().get_nodes_in_group("worker")
+	for w in workers:
+		if w == self: continue
+		if is_instance_valid(w) and is_instance_valid(w.gossip_target) and w.gossip_target == self:
+			w._finish_gossip()
+
 	state = State.DRAGGING
 	drag_offset = get_global_mouse_position() - global_position
 	can_gossip = false
+	is_gossiping = false
+	gossip_target = null
 	SignalBus.emit_signal("worker_drag_started", self)
+	velocity = Vector2.ZERO
 
 func _on_button_button_up() -> void:
 	state = prev_state if prev_state != State.DRAGGING else State.IDLE
 	prev_state = state
 	SignalBus.emit_signal("worker_drag_stopped", self)
 
-# --- PUBLIC APIS for manager ---
+# Public API
 func api_set_state(new_state: State) -> void:
 	state = new_state
 
@@ -249,7 +275,10 @@ func api_force_idle() -> void:
 	_enter_idle()
 
 func api_stop_all() -> void:
-	_set_state_internal(State.IDLE)
+	state = State.IDLE
 	velocity = Vector2.ZERO
 	is_gossiping = false
 	gossip_target = null
+	can_gossip = true
+	_gossip_check_timer = gossip_check_interval
+	_gossip_cooldown_timer = 0.0
