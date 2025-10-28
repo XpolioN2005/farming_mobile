@@ -1,7 +1,7 @@
 extends CharacterBody2D
 class_name BaseWorker
 
-enum State { IDLE, WANDER, GO_TO_WORK, HARVESTING, STOREING, GOSSIP, DRAGGING }
+enum State { IDLE, WANDER, GO_TO_WORK, HARVESTING, STOREING, DRAGGING }
 
 # Tunables (exported)
 @export_range(0.0, 2000.0, 1.0) var speed: float = 120.0
@@ -11,11 +11,6 @@ enum State { IDLE, WANDER, GO_TO_WORK, HARVESTING, STOREING, GOSSIP, DRAGGING }
 @export var idle_time_range: Vector2 = Vector2(1.0, 3.0)
 
 @export_range(0.0, 120.0, 0.1) var work_duration: float = 5.0
-@export_range(0.0, 120.0, 0.1) var gossip_duration: float = 3.0
-@export_range(0.0, 2000.0, 1.0) var gossip_radius: float = 200.0
-@export_range(0.0, 1.0, 0.01) var gossip_chance: float = 0.25
-@export_range(0.1, 10.0, 0.1) var gossip_check_interval: float = 2.0
-@export_range(0.0, 60.0, 0.1) var gossip_cooldown: float = 6.0
 
 # Inventory settings
 @export_range(1, 16, 1) var inventory_size: int = 1
@@ -45,14 +40,6 @@ var origin: Vector2 = Vector2.ZERO
 var work_position: Vector2 = Vector2.ZERO
 var work_timer: float = 0.0
 
-# Gossip state
-var gossip_target: BaseWorker = null
-var gossip_timer: float = 0.0
-var is_gossiping: bool = false
-var can_gossip: bool = true
-var _gossip_check_timer: float = 0.0
-var _gossip_cooldown_timer: float = 0.0
-
 # Drag
 var drag_offset: Vector2 = Vector2.ZERO
 
@@ -70,23 +57,11 @@ func _ready() -> void:
 
 	state = State.IDLE
 	_enter_idle()
-	_gossip_check_timer = gossip_check_interval
 
 	# init inventory
 	inventory.clear()
 
 func _physics_process(delta: float) -> void:
-	_gossip_check_timer -= delta
-	if _gossip_check_timer <= 0.0:
-		_gossip_check_timer = gossip_check_interval
-		_try_autogossip()
-
-	if not can_gossip:
-		_gossip_cooldown_timer -= delta
-		if _gossip_cooldown_timer <= 0.0:
-			can_gossip = true
-			_gossip_cooldown_timer = 0.0
-
 	match state:
 		State.DRAGGING:
 			_state_dragging()
@@ -100,8 +75,6 @@ func _physics_process(delta: float) -> void:
 			_state_harvesting(delta)
 		State.STOREING:
 			_state_storeing(delta)
-		State.GOSSIP:
-			_state_gossip(delta)
 
 	_update_facing()
 
@@ -147,8 +120,6 @@ func _state_harvesting(delta: float) -> void:
 	velocity = Vector2.ZERO
 	if work_timer <= 0.0:
 		# Position-based harvesting: notify systems that harvesting finished at this position.
-		# External systems should listen to "worker_harvest_started" / "worker_harvest_finished"
-		# and call public inventory APIs on this worker if they want to give items.
 		SignalBus.emit_signal("worker_harvest_finished", self, work_position)
 		if state == State.HARVESTING:
 			_enter_idle()
@@ -162,22 +133,8 @@ func _state_storeing(delta: float) -> void:
 		SignalBus.emit_signal("worker_store_finished", self, work_position)
 		_enter_idle()
 
-func _state_gossip(delta: float) -> void:
-	if not is_instance_valid(gossip_target):
-		_finish_gossip()
-		return
-	var to = gossip_target.global_position - global_position
-	if to.length() > arrive_threshold:
-		velocity = to.normalized() * speed
-	else:
-		gossip_timer -= delta
-		velocity = Vector2.ZERO
-		if gossip_timer <= 0.0:
-			_finish_gossip()
-
 # Transitions / helpers
 func _enter_idle() -> void:
-	# if state ==
 	state = State.IDLE
 	idle_timer = randf_range(idle_time_range.x, idle_time_range.y)
 	velocity = Vector2.ZERO
@@ -252,59 +209,6 @@ func can_work() -> bool:
 		return randf() > lazy_chance # worker refuses half the time
 	return false
 
-
-# Gossip
-func start_gossip_with(target: BaseWorker, duration: float = -1.0) -> bool:
-	if not _can_start_gossip(target):
-		return false
-	_begin_gossip(target, duration)
-	target._begin_gossip(self, duration)
-	SignalBus.emit_signal("worker_gossip_started", self, target)
-	return true
-
-func _can_start_gossip(target: BaseWorker) -> bool:
-	if state == State.DRAGGING or is_gossiping or not can_gossip:
-		return false
-	if not is_instance_valid(target):
-		return false
-	if target.state == State.DRAGGING or target.is_gossiping or not target.can_gossip:
-		return false
-	return true
-
-func _begin_gossip(target: BaseWorker, duration: float = -1.0) -> void:
-	gossip_target = target
-	state = State.GOSSIP
-	is_gossiping = true
-	gossip_timer = duration if duration > 0.0 else gossip_duration
-
-func _finish_gossip() -> void:
-	var prev_target = gossip_target
-	is_gossiping = false
-	SignalBus.emit_signal("worker_gossip_finished", self, prev_target)
-	gossip_target = null
-	_enter_idle()
-	can_gossip = false
-	_gossip_cooldown_timer = gossip_cooldown
-
-func _try_autogossip() -> void:
-	if state in [State.DRAGGING, State.HARVESTING, State.GOSSIP]:
-		return
-	if not can_gossip or is_gossiping:
-		return
-	if randf() >= gossip_chance:
-		return
-	var workers = get_tree().get_nodes_in_group("worker")
-	var candidates: Array = []
-	for w in workers:
-		if w == self: continue
-		if not is_instance_valid(w): continue
-		if global_position.distance_to(w.global_position) <= gossip_radius:
-			candidates.append(w)
-	if candidates.size() == 0:
-		return
-	var idx = randi() % candidates.size()
-	start_gossip_with(candidates[idx])
-
 func _update_facing() -> void:
 	if _sprite_node:
 		_sprite_node.flip_h = velocity.x < 0.0
@@ -315,21 +219,8 @@ func _on_button_button_down() -> void:
 	scale *= 1.2
 	prev_state = state
 
-	# stop gossip on both sides if involved
-	if is_gossiping and is_instance_valid(gossip_target):
-		gossip_target._finish_gossip()
-	# stop any other worker currently gossiping with us
-	var workers = get_tree().get_nodes_in_group("worker")
-	for w in workers:
-		if w == self: continue
-		if is_instance_valid(w) and is_instance_valid(w.gossip_target) and w.gossip_target == self:
-			w._finish_gossip()
-
 	state = State.DRAGGING
 	drag_offset = get_global_mouse_position() - global_position
-	can_gossip = false
-	is_gossiping = false
-	gossip_target = null
 	SignalBus.emit_signal("worker_drag_started", self)
 	velocity = Vector2.ZERO
 

@@ -5,6 +5,7 @@ extends Node
 
 var workers: Array[BaseWorker] = []
 var last_work: Dictionary = {}
+var worker_busy: Dictionary = {}
 
 func _ready() -> void:
 	SignalBus.connect("worker_harvest_finished", Callable(self, "_on_worker_harvest_finished"))
@@ -19,32 +20,24 @@ func _spawn_workers() -> void:
 		var worker: BaseWorker = worker_scene.instantiate()
 		add_child(worker)
 		workers.append(worker)
+		worker_busy[worker.get_instance_id()] = false
+	print("WorkerManager: spawned %d workers" % workers.size())
 
 func _process(_delta: float) -> void:
 	for worker in workers:
 		if not is_instance_valid(worker):
 			continue
+		if worker_busy.get(worker.get_instance_id(), false):
+			continue
 		if not worker.can_work():
 			continue
 
-		var available_actions: Array = []
-
 		if not GameManeger.ready_plots.is_empty():
-			available_actions.append("harvest")
-		if not GameManeger.plots.is_empty():
-			available_actions.append("plant")
-
-		if available_actions.is_empty():
-			continue
-
-		var chosen_action = available_actions.pick_random()
-
-		match chosen_action:
-			"harvest":
-				get_crop_for(worker)
-			"plant":
-				place_seed_for(worker)
-
+			print("WorkerManager: _process -> assigning get_crop_for to", worker.name)
+			get_crop_for(worker)
+		elif not GameManeger.plots.is_empty():
+			print("WorkerManager: _process -> assigning place_seed_for to", worker.name)
+			place_seed_for(worker)
 
 # --- Work assignment ---
 
@@ -57,7 +50,9 @@ func place_seed_for(worker: BaseWorker, kind: int = 0) -> void:
 	var pos = GameManeger.plots[plot_index]
 	GameManeger.plots.remove_at(plot_index)
 
-	worker.start_harvest_at(pos, 2.0)
+	worker_busy[id] = true
+	print("WorkerManager: place_seed_for -> worker %s (id=%d) assigned plot %s" % [str(worker.name), id, str(pos)])
+	worker.start_harvest_at(pos)
 
 	var crop = crop_scene.instantiate()
 	crop.crop_type = kind
@@ -74,10 +69,15 @@ func get_crop_for(worker: BaseWorker) -> void:
 		return
 
 	var id = worker.get_instance_id()
-	var crop = GameManeger.ready_plots[randi() % GameManeger.ready_plots.size()]
+	var plot_index = randi() % GameManeger.ready_plots.size()
+	var crop = GameManeger.ready_plots[plot_index]
+	GameManeger.ready_plots.remove_at(plot_index)
+
 	var pos = crop.global_position
 
-	worker.start_harvest_at(pos, 1.0)
+	worker_busy[id] = true
+	print("WorkerManager: get_crop_for -> worker %s (id=%d) assigned crop at %s" % [str(worker.name), id, str(pos)])
+	worker.start_harvest_at(pos)
 
 	last_work[id] = {
 		"state": "got_crop",
@@ -89,7 +89,9 @@ func store(worker: BaseWorker) -> void:
 	if worker == null:
 		return
 	var id = worker.get_instance_id()
-	worker.start_store_at(Vector2i(0,0), 1.0)
+	worker_busy[id] = true
+	print("WorkerManager: store -> worker %s (id=%d) started storing" % [str(worker.name), id])
+	worker.start_store_at(Vector2i.ZERO)
 	last_work[id] = {"state": "stored"}
 
 # --- Signals ---
@@ -100,6 +102,8 @@ func _on_worker_harvest_finished(worker: BaseWorker, pos) -> void:
 
 	var id = worker.get_instance_id()
 	if not last_work.has(id):
+		print("WorkerManager: _on_worker_harvest_finished -> no last_work for worker", worker.name, id)
+		worker_busy[id] = false
 		return
 
 	var info = last_work[id]
@@ -111,6 +115,8 @@ func _on_worker_harvest_finished(worker: BaseWorker, pos) -> void:
 				crop.global_position = pos
 				crop._next_state()
 				crop._timer.start()
+				print("WorkerManager: placed seed node reparented to plot_node for worker %s (id=%d)" % [str(worker.name), id])
+			worker_busy[id] = false
 			last_work.erase(id)
 
 		"got_crop":
@@ -119,13 +125,17 @@ func _on_worker_harvest_finished(worker: BaseWorker, pos) -> void:
 				crop.harvest()
 				crop.reparent(worker.get_node("inv"))
 				crop.global_position = worker.get_node("inv").global_position
-				GameManeger.plots.append(pos)
 				worker.give_item(crop)
+				print("WorkerManager: got_crop -> worker %s (id=%d) picked up crop" % [str(worker.name), id])
 				store(worker)
 			else:
+				print("WorkerManager: got_crop -> crop not valid for worker", worker.name, id)
+				worker_busy[id] = false
 				last_work.erase(id)
 
 		_:
+			print("WorkerManager: _on_worker_harvest_finished -> unexpected state '%s' for worker %s" % [str(info.get("state", "")), str(worker.name)])
+			worker_busy[id] = false
 			last_work.erase(id)
 
 func _on_worker_store_finished(worker: BaseWorker, _pos) -> void:
@@ -134,6 +144,8 @@ func _on_worker_store_finished(worker: BaseWorker, _pos) -> void:
 
 	var id = worker.get_instance_id()
 	if not last_work.has(id):
+		print("WorkerManager: _on_worker_store_finished -> no last_work for worker", worker.name, id)
+		worker_busy[id] = false
 		return
 
 	var info = last_work[id]
@@ -142,8 +154,9 @@ func _on_worker_store_finished(worker: BaseWorker, _pos) -> void:
 			var crop = worker.take_first_item()
 			if is_instance_valid(crop):
 				crop.queue_free()
+				print("WorkerManager: store_finished -> freed crop from worker %s (id=%d)" % [str(worker.name), id])
+			worker_busy[id] = false
 			last_work.erase(id)
-
-			worker.set_resting(true, 10)
 		_:
-			pass
+			print("WorkerManager: _on_worker_store_finished -> unexpected store state '%s' for worker %s" % [str(info.get("state", "")), str(worker.name)])
+			worker_busy[id] = false
