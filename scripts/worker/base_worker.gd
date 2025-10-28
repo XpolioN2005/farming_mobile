@@ -53,10 +53,6 @@ var can_gossip: bool = true
 var _gossip_check_timer: float = 0.0
 var _gossip_cooldown_timer: float = 0.0
 
-# Resting (new)
-var is_resting: bool = false
-var _rest_timer: float = 0.0
-
 # Drag
 var drag_offset: Vector2 = Vector2.ZERO
 
@@ -80,13 +76,6 @@ func _ready() -> void:
 	inventory.clear()
 
 func _physics_process(delta: float) -> void:
-	# rest timer handling
-	if is_resting:
-		_rest_timer -= delta
-		if _rest_timer <= 0.0:
-			is_resting = false
-			_rest_timer = 0.0
-
 	_gossip_check_timer -= delta
 	if _gossip_check_timer <= 0.0:
 		_gossip_check_timer = gossip_check_interval
@@ -157,6 +146,9 @@ func _state_harvesting(delta: float) -> void:
 	work_timer -= delta
 	velocity = Vector2.ZERO
 	if work_timer <= 0.0:
+		# Position-based harvesting: notify systems that harvesting finished at this position.
+		# External systems should listen to "worker_harvest_started" / "worker_harvest_finished"
+		# and call public inventory APIs on this worker if they want to give items.
 		SignalBus.emit_signal("worker_harvest_finished", self, work_position)
 		if state == State.HARVESTING:
 			_enter_idle()
@@ -166,6 +158,7 @@ func _state_storeing(delta: float) -> void:
 	work_timer -= delta
 	velocity = Vector2.ZERO
 	if work_timer <= 0.0:
+		# External systems listening to this signal can attempt to pull items from the worker via provided API.
 		SignalBus.emit_signal("worker_store_finished", self, work_position)
 		_enter_idle()
 
@@ -184,6 +177,7 @@ func _state_gossip(delta: float) -> void:
 
 # Transitions / helpers
 func _enter_idle() -> void:
+	# if state ==
 	state = State.IDLE
 	idle_timer = randf_range(idle_time_range.x, idle_time_range.y)
 	velocity = Vector2.ZERO
@@ -229,6 +223,7 @@ func _enter_storeing() -> void:
 # Inventory helpers (public/usable by external systems)
 func _inventory_add(item) -> bool:
 	if inventory.size() >= inventory_size:
+		# no space
 		SignalBus.emit_signal("worker_inventory_full", self, item)
 		return false
 	inventory.append(item)
@@ -244,26 +239,19 @@ func _inventory_remove_first() -> Variant:
 
 # Public wrappers so external systems can request items from / give items to the worker
 func give_item(item) -> bool:
+	# External system should call this when they want to put an item into the worker after harvesting.
 	return _inventory_add(item)
 
 func take_first_item() -> Variant:
+	# External system can call this to take the first item from inventory when storing.
 	return _inventory_remove_first()
 
 func can_work() -> bool:
-	if is_resting:
-		return false
 	if state in [State.IDLE, State.WANDER]:
 		var lazy_chance = 0.5
-		return randf() > lazy_chance
+		return randf() > lazy_chance # worker refuses half the time
 	return false
 
-# Rest control (new)
-func set_resting(rest: bool, duration: float = 0.0) -> void:
-	is_resting = rest
-	if rest:
-		_rest_timer = duration if duration > 0.0 else 0.0
-	else:
-		_rest_timer = 0.0
 
 # Gossip
 func start_gossip_with(target: BaseWorker, duration: float = -1.0) -> bool:

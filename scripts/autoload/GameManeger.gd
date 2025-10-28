@@ -4,7 +4,7 @@ var plot_node: Node
 var plots: Array[Vector2] = []
 var ready_plots: = []
 
-var worker_number: int = 5
+var worker_number: int = 1
 
 func add_worker(num: int) -> void:
 	worker_number += num
