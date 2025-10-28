@@ -17,7 +17,7 @@ func get_all_plot_positions() -> Array[Vector2]:
 	var positions: Array[Vector2] = []
 	for cell in get_all_plots():
 		# local top-left -> add half-tile -> convert to global
-		var local_pos = map_to_local(cell) + HALF_TILE_OFFSET
+		var local_pos = map_to_local(cell)
 		positions.append(to_global(local_pos))
 	return positions
 

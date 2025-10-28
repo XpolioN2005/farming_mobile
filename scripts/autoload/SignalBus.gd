@@ -7,10 +7,10 @@ signal worker_arrived(worker, position)
 
 # Harvest / store
 signal worker_harvest_started(worker, duration)
-signal worker_harvest_finished(worker)
+signal worker_harvest_finished(worker, pos)
 signal worker_harvest_picked(worker, item)
-signal worker_store_started(worker, duration)
-signal worker_store_finished(worker)
+signal worker_store_started(worker, duration, pos)
+signal worker_store_finished(worker, pos)
 signal worker_store_delivered(worker)
 
 # Inventory

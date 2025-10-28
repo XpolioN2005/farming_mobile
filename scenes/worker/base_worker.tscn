@@ -72,5 +72,8 @@ offset_top = -10.0
 offset_right = 10.0
 offset_bottom = 10.0
 
+[node name="inv" type="Node2D" parent="."]
+position = Vector2(0, -13)
+
 [connection signal="button_down" from="Button" to="." method="_on_button_button_down"]
 [connection signal="button_up" from="Button" to="." method="_on_button_button_up"]

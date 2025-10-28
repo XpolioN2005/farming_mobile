@@ -5,9 +5,10 @@
 
 [node name="crop" type="Node2D"]
 script = ExtResource("1_fe780")
+test_interval_seconds = 1.0
 
 [node name="sprite" type="Sprite2D" parent="."]
-position = Vector2(0, -16)
+position = Vector2(0, -8)
 texture = ExtResource("1_pl0dt")
 region_enabled = true
-region_rect = Rect2(112, 32, 16, 32)
+region_rect = Rect2(32, 0, 16, 32)

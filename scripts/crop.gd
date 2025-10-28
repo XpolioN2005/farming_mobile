@@ -1,5 +1,4 @@
 extends Node2D
-
 class_name Crop
 
 enum CropState { BAG, HARVESTED, SEEDED, GROWTH1, HARVESTABLE }
@@ -27,7 +26,6 @@ var sprite_per_crop: Array = [
 	[28, 29, 30, 31, 32]  # spinach
 ]
 
-
 func _ready() -> void:
 	_timer = Timer.new()
 	_timer.wait_time = test_interval_seconds
@@ -40,28 +38,25 @@ func _ready() -> void:
 	if auto_cycle:
 		_timer.start()
 
-
 func _on_timer_timeout() -> void:
 	if state < CropState.HARVESTABLE:
 		_next_state()
 	else:
-		_timer.stop() # stop once fully grown
-
+		_timer.stop()
 
 func _next_state() -> void:
-	# advance state only within growable range
-	if state == CropState.BAG:
-		state = CropState.SEEDED
-	elif state == CropState.SEEDED:
-		state = CropState.GROWTH1
-	elif state == CropState.GROWTH1:
-		state = CropState.HARVESTABLE
-	else:
-		return
+	match state:
+		CropState.BAG:
+			state = CropState.SEEDED
+		CropState.SEEDED:
+			state = CropState.GROWTH1
+		CropState.GROWTH1:
+			state = CropState.HARVESTABLE
+			_on_become_harvestable()
+		_:
+			return
 
 	_update_sprite()
-	print("State:", CropState.keys()[state])
-
 
 func _update_sprite() -> void:
 	var frames = sprite_per_crop[crop_type]
@@ -70,14 +65,16 @@ func _update_sprite() -> void:
 	var row = frame_index / cols
 	sprite.region_rect = Rect2(col * cell_size.x, row * cell_size.y, cell_size.x, cell_size.y)
 
+func _on_become_harvestable() -> void:
+	if Engine.is_editor_hint():
+		return
+	if not GameManeger.ready_plots.has(self):
+		GameManeger.ready_plots.append(self)
 
 # --- PUBLIC API ---
 
 func harvest() -> void:
-	"""
-	Force the crop into the HARVESTED state.
-	Use this when the player harvests it.
-	"""
 	state = CropState.HARVESTED
 	_update_sprite()
-	print("Crop harvested!")
+	if GameManeger.ready_plots.has(self):
+		GameManeger.ready_plots.erase(self)
