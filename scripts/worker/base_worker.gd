@@ -1,19 +1,7 @@
 extends CharacterBody2D
 class_name BaseWorker
 
-"""
-BaseWorker
-
-A simple autonomous worker NPC with states: IDLE, WANDER, GO_TO_WORK, WORKING, GOSSIP, DRAGGING.
-
-- Emits signals through a project-wide SignalBus:
-  "worker_state_changed", "worker_arrived", "worker_work_started",
-  "worker_work_finished", "worker_gossip_started", "worker_gossip_finished",
-  "worker_drag_started", "worker_drag_stopped"
-- Add this node to the "worker" group (done in _ready).
-"""
-
-enum State { IDLE, WANDER, GO_TO_WORK, WORKING, GOSSIP, DRAGGING }
+enum State { IDLE, WANDER, GO_TO_WORK, HARVESTING, STOREING, GOSSIP, DRAGGING }
 
 # Tunables (exported)
 @export_range(0.0, 2000.0, 1.0) var speed: float = 120.0
@@ -28,6 +16,10 @@ enum State { IDLE, WANDER, GO_TO_WORK, WORKING, GOSSIP, DRAGGING }
 @export_range(0.0, 1.0, 0.01) var gossip_chance: float = 0.25
 @export_range(0.1, 10.0, 0.1) var gossip_check_interval: float = 2.0
 @export_range(0.0, 60.0, 0.1) var gossip_cooldown: float = 6.0
+
+# Inventory settings
+@export_range(1, 16, 1) var inventory_size: int = 1
+var inventory: Array = []
 
 # Backing state + property (Godot 4 style)
 var _state_internal: State = State.IDLE
@@ -49,6 +41,7 @@ var wander_target: Vector2 = Vector2.ZERO
 var wander_timer: float = 0.0
 var origin: Vector2 = Vector2.ZERO
 
+# Work by position only
 var work_position: Vector2 = Vector2.ZERO
 var work_timer: float = 0.0
 
@@ -79,6 +72,9 @@ func _ready() -> void:
 	_enter_idle()
 	_gossip_check_timer = gossip_check_interval
 
+	# init inventory
+	inventory.clear()
+
 func _physics_process(delta: float) -> void:
 	_gossip_check_timer -= delta
 	if _gossip_check_timer <= 0.0:
@@ -100,14 +96,16 @@ func _physics_process(delta: float) -> void:
 			_state_wander(delta)
 		State.GO_TO_WORK:
 			_state_go_to_work(delta)
-		State.WORKING:
-			_state_working(delta)
+		State.HARVESTING:
+			_state_harvesting(delta)
+		State.STOREING:
+			_state_storeing(delta)
 		State.GOSSIP:
 			_state_gossip(delta)
 
 	_update_facing()
 
-	if state not in [State.DRAGGING, State.IDLE, State.WORKING]:
+	if state not in [State.DRAGGING, State.IDLE, State.HARVESTING, State.STOREING]:
 		if velocity != Vector2.ZERO:
 			if velocity.length() > speed:
 				velocity = velocity.normalized() * speed
@@ -135,17 +133,33 @@ func _state_wander(delta: float) -> void:
 func _state_go_to_work(_delta: float) -> void:
 	var to = work_position - global_position
 	if to.length() <= arrive_threshold:
-		_enter_working()
+		# Decide which post-arrival state to enter based on meta (storeing) else harvesting
+		if has_meta("next_state_after_arrival") and get_meta("next_state_after_arrival") == "storeing":
+			_enter_storeing()
+		else:
+			_enter_harvesting()
 		SignalBus.emit_signal("worker_arrived", self, work_position)
 		return
 	velocity = to.normalized() * speed
 
-func _state_working(delta: float) -> void:
+func _state_harvesting(delta: float) -> void:
 	work_timer -= delta
 	velocity = Vector2.ZERO
 	if work_timer <= 0.0:
+		# Position-based harvesting: notify systems that harvesting finished at this position.
+		# External systems should listen to "worker_harvest_started" / "worker_harvest_finished"
+		# and call public inventory APIs on this worker if they want to give items.
+		SignalBus.emit_signal("worker_harvest_finished", self, work_position)
 		_enter_idle()
-		SignalBus.emit_signal("worker_work_finished", self)
+
+func _state_storeing(delta: float) -> void:
+	# Position-based storing: stand still for work_timer seconds then notify finished.
+	work_timer -= delta
+	velocity = Vector2.ZERO
+	if work_timer <= 0.0:
+		# External systems listening to this signal can attempt to pull items from the worker via provided API.
+		SignalBus.emit_signal("worker_store_finished", self, work_position)
+		_enter_idle()
 
 func _state_gossip(delta: float) -> void:
 	if not is_instance_valid(gossip_target):
@@ -166,22 +180,69 @@ func _enter_idle() -> void:
 	idle_timer = randf_range(idle_time_range.x, idle_time_range.y)
 	velocity = Vector2.ZERO
 
+	work_position = Vector2.ZERO
+	work_timer = 0.0
+	if has_meta("next_state_after_arrival"):
+		remove_meta("next_state_after_arrival")
+
 func _pick_new_wander_target() -> void:
 	wander_timer = wander_retarget_time
 	var angle = randf() * TAU
 	var r = randf() * wander_radius
 	wander_target = origin + Vector2(cos(angle), sin(angle)) * r
 
-func start_work_at(pos: Vector2, duration: float = -1.0) -> void:
+# Public API to start harvesting/storing by position (existing)
+func start_harvest_at(pos: Vector2, duration: float = -1.0) -> void:
 	work_position = pos
 	state = State.GO_TO_WORK
 	work_timer = duration if duration > 0.0 else work_duration
+	SignalBus.emit_signal("worker_harvest_started", self, work_timer, work_position)
 
-func _enter_working() -> void:
-	state = State.WORKING
+func start_store_at(pos: Vector2, duration: float = -1.0) -> void:
+	work_position = pos
+	state = State.GO_TO_WORK
+	work_timer = duration if duration > 0.0 else work_duration
+	set_meta("next_state_after_arrival", "storeing")
+	SignalBus.emit_signal("worker_store_started", self, work_timer, work_position)
+
+# Enter states (called when arriving)
+func _enter_harvesting() -> void:
+	state = State.HARVESTING
 	if work_timer <= 0.0:
 		work_timer = work_duration
-	SignalBus.emit_signal("worker_work_started", self, work_timer)
+	SignalBus.emit_signal("worker_harvest_started", self, work_timer, work_position)
+
+func _enter_storeing() -> void:
+	state = State.STOREING
+	if work_timer <= 0.0:
+		work_timer = work_duration
+	SignalBus.emit_signal("worker_store_started", self, work_timer, work_position)
+
+# Inventory helpers (public/usable by external systems)
+func _inventory_add(item) -> bool:
+	if inventory.size() >= inventory_size:
+		# no space
+		SignalBus.emit_signal("worker_inventory_full", self, item)
+		return false
+	inventory.append(item)
+	SignalBus.emit_signal("worker_inventory_changed", self, inventory.duplicate())
+	return true
+
+func _inventory_remove_first() -> Variant:
+	if inventory.size() == 0:
+		return null
+	var it = inventory.pop_front()
+	SignalBus.emit_signal("worker_inventory_changed", self, inventory.duplicate())
+	return it
+
+# Public wrappers so external systems can request items from / give items to the worker
+func give_item(item) -> bool:
+	# External system should call this when they want to put an item into the worker after harvesting.
+	return _inventory_add(item)
+
+func take_first_item() -> Variant:
+	# External system can call this to take the first item from inventory when storing.
+	return _inventory_remove_first()
 
 # Gossip
 func start_gossip_with(target: BaseWorker, duration: float = -1.0) -> bool:
@@ -217,7 +278,7 @@ func _finish_gossip() -> void:
 	_gossip_cooldown_timer = gossip_cooldown
 
 func _try_autogossip() -> void:
-	if state in [State.DRAGGING, State.WORKING, State.GOSSIP]:
+	if state in [State.DRAGGING, State.HARVESTING, State.GOSSIP]:
 		return
 	if not can_gossip or is_gossiping:
 		return
@@ -277,25 +338,3 @@ func _on_button_button_up() -> void:
 	var mat = _sprite_node.material
 	if mat and mat is ShaderMaterial:
 		mat.set_shader_parameter("outline_enabled", false)
-
-# Public API
-func api_set_state(new_state: State) -> void:
-	state = new_state
-
-func api_start_work_at(pos: Vector2, duration: float = -1.0) -> void:
-	start_work_at(pos, duration)
-
-func api_force_gossip(target: BaseWorker) -> void:
-	start_gossip_with(target, gossip_duration)
-
-func api_force_idle() -> void:
-	_enter_idle()
-
-func api_stop_all() -> void:
-	state = State.IDLE
-	velocity = Vector2.ZERO
-	is_gossiping = false
-	gossip_target = null
-	can_gossip = true
-	_gossip_check_timer = gossip_check_interval
-	_gossip_cooldown_timer = 0.0

@@ -1,10 +1,13 @@
-[gd_scene load_steps=2 format=3 uid="uid://cryhjr3vivw02"]
+[gd_scene load_steps=3 format=3 uid="uid://cryhjr3vivw02"]
 
+[ext_resource type="Script" uid="uid://cpnhrqq8ra3f1" path="res://scripts/crop.gd" id="1_fe780"]
 [ext_resource type="Texture2D" uid="uid://dlnyt1srkixj6" path="res://assests/sprites/fram/crops/crops - all.png" id="1_pl0dt"]
 
 [node name="crop" type="Node2D"]
+script = ExtResource("1_fe780")
 
-[node name="Sprite2D" type="Sprite2D" parent="."]
+[node name="sprite" type="Sprite2D" parent="."]
+position = Vector2(0, -16)
 texture = ExtResource("1_pl0dt")
 region_enabled = true
 region_rect = Rect2(112, 32, 16, 32)

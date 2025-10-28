@@ -1,3 +1,4 @@
+# plot.gd
 extends TileMapLayer
 
 const TILE_SIZE := 16
@@ -21,4 +22,6 @@ func get_all_plot_positions() -> Array[Vector2]:
 	return positions
 
 func _ready():
+	GameManeger.plot_node = self
 	GameManeger.plots = get_all_plot_positions()
+
