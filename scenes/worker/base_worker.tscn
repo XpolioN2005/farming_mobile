@@ -1,7 +1,15 @@
-[gd_scene load_steps=9 format=3 uid="uid://cnm4yatmxkj5u"]
+[gd_scene load_steps=11 format=3 uid="uid://cnm4yatmxkj5u"]
 
 [ext_resource type="Script" uid="uid://dw18i2ax1jm4y" path="res://scripts/worker/base_worker.gd" id="1_byddt"]
 [ext_resource type="Texture2D" uid="uid://c5umdaw0804d0" path="res://assests/sprites/charector/idle.png" id="1_kw5um"]
+[ext_resource type="Shader" uid="uid://r8ehnc28prai" path="res://shaders/outline.gdshader" id="2_x711c"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_t3ckp"]
+shader = ExtResource("2_x711c")
+shader_parameter/outline_enabled = false
+shader_parameter/outline_color = Color(1, 1, 1, 1)
+shader_parameter/blink_color = Color(1, 1, 1, 1)
+shader_parameter/blink_time_scale = 0.0
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_byddt"]
 atlas = ExtResource("1_kw5um")
@@ -47,6 +55,7 @@ height = 10.0
 script = ExtResource("1_byddt")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+material = SubResource("ShaderMaterial_t3ckp")
 sprite_frames = SubResource("SpriteFrames_q4nce")
 animation = &"idle_side"
 autoplay = "idle_side"

@@ -70,6 +70,11 @@ func _ready() -> void:
 	add_to_group("worker")
 	velocity = Vector2.ZERO
 	origin = global_position
+
+	if _sprite_node and _sprite_node.material and _sprite_node.material is ShaderMaterial:
+		_sprite_node.material = _sprite_node.material.duplicate()
+		_sprite_node.material.set_shader_parameter("outline_enabled", false)
+
 	state = State.IDLE
 	_enter_idle()
 	_gossip_check_timer = gossip_check_interval
@@ -258,12 +263,20 @@ func _on_button_button_down() -> void:
 	SignalBus.emit_signal("worker_drag_started", self)
 	velocity = Vector2.ZERO
 
+	var mat = _sprite_node.material
+	if mat and mat is ShaderMaterial:
+		mat.set_shader_parameter("outline_enabled", true)
+
 func _on_button_button_up() -> void:
 	z_index = 0
 	scale = Vector2(1.0,1.0)
 	state = prev_state if prev_state != State.DRAGGING else State.IDLE
 	prev_state = state
 	SignalBus.emit_signal("worker_drag_stopped", self)
+
+	var mat = _sprite_node.material
+	if mat and mat is ShaderMaterial:
+		mat.set_shader_parameter("outline_enabled", false)
 
 # Public API
 func api_set_state(new_state: State) -> void:
