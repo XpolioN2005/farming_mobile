@@ -1,6 +1,7 @@
-[gd_scene load_steps=16 format=4 uid="uid://deooa77twdrf6"]
+[gd_scene load_steps=17 format=4 uid="uid://deooa77twdrf6"]
 
 [ext_resource type="Texture2D" uid="uid://cuppwxq3gcomq" path="res://assests/Hana Caraka - Topdown Tileset [sample]/Hana Caraka - Topdown Tileset [sample]/Tileset/dirt.png" id="1_l8v81"]
+[ext_resource type="Script" uid="uid://f6nvp3177la2" path="res://root.gd" id="1_tw3kd"]
 [ext_resource type="PackedScene" uid="uid://cnm4yatmxkj5u" path="res://scenes/worker/base_worker.tscn" id="2_pyidc"]
 [ext_resource type="Texture2D" uid="uid://bofssn6sy4ymp" path="res://assests/Hana Caraka - Topdown Tileset [sample]/Hana Caraka - Topdown Tileset [sample]/Tileset/Seasonal/spring.png" id="2_vyht1"]
 [ext_resource type="Texture2D" uid="uid://ch1jvjjyooivn" path="res://assests/Hana Caraka - Topdown Tileset [sample]/Hana Caraka - Topdown Tileset [sample]/Tileset/Water/water - spring.png" id="3_vyht1"]
@@ -123,6 +124,7 @@ sources/0 = SubResource("TileSetAtlasSource_vyht1")
 
 [node name="root" type="Node2D"]
 y_sort_enabled = true
+script = ExtResource("1_tw3kd")
 
 [node name="base" type="TileMapLayer" parent="."]
 z_index = -1
@@ -145,3 +147,50 @@ script = ExtResource("5_l8v81")
 [node name="worker_manager" parent="." instance=ExtResource("7_bf3um")]
 worker_scene = ExtResource("2_pyidc")
 crop_scene = ExtResource("8_bf3um")
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="HBoxContainer" type="HBoxContainer" parent="CanvasLayer"]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -116.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="MarginContainer2" type="MarginContainer" parent="CanvasLayer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_left = 50
+theme_override_constants/margin_top = 50
+theme_override_constants/margin_right = 50
+theme_override_constants/margin_bottom = 50
+
+[node name="Label" type="Label" parent="CanvasLayer/HBoxContainer/MarginContainer2"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 25
+text = "5
+"
+
+[node name="MarginContainer" type="MarginContainer" parent="CanvasLayer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_left = 50
+theme_override_constants/margin_top = 50
+theme_override_constants/margin_right = 50
+theme_override_constants/margin_bottom = 50
+
+[node name="HSlider" type="HSlider" parent="CanvasLayer/HBoxContainer/MarginContainer"]
+custom_minimum_size = Vector2(800, 0)
+layout_mode = 2
+min_value = 1.0
+max_value = 500.0
+value = 1.0
+
+[node name="Button" type="Button" parent="CanvasLayer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "RESTART"
+
+[connection signal="pressed" from="CanvasLayer/HBoxContainer/Button" to="." method="_on_button_pressed"]

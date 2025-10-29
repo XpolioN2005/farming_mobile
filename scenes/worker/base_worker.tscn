@@ -64,6 +64,7 @@ frame_progress = 0.962067
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(0, 2)
 shape = SubResource("CapsuleShape2D_kw5um")
+disabled = true
 
 [node name="Button" type="Button" parent="."]
 self_modulate = Color(1, 1, 1, 0)
